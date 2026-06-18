@@ -22,6 +22,7 @@ import { ChatSidebar } from "@/components/lord/ChatSidebar";
 import { RichMessage } from "@/components/lord/RichMessage";
 import { TypingDots } from "@/components/lord/TypingDots";
 import { supabase } from "@/integrations/supabase/client";
+import { getApiBaseUrl } from "@/lib/api-config";
 import { cn } from "@/lib/utils";
 import type { LordMode } from "@/lib/lord-config";
 

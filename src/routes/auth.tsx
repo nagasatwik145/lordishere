@@ -1,12 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { authClient } from "@/lib/auth-client";
 import { AppShell } from "@/components/lord/AppShell";
 import { HudPanel } from "@/components/lord/HudPanel";
-import { Loader2, Mail, Lock, User as UserIcon, Chrome } from "lucide-react";
+import { Loader2, Mail, Lock, User as UserIcon } from "lucide-react";
 
-type Mode = "signin" | "signup" | "forgot";
+type Mode = "signin" | "signup";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -26,8 +25,8 @@ function AuthPage() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted && data.user) navigate({ to: "/chat" });
+    authClient.getSession().then((session) => {
+      if (mounted && session?.user) navigate({ to: "/chat" });
     });
     return () => {
       mounted = false;
@@ -41,26 +40,23 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const result = await authClient.signUp.email({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/chat`,
-            data: { name: name.trim() || email.split("@")[0] },
-          },
+          name: name.trim() || email.split("@")[0],
         });
-        if (error) throw error;
-        setInfo("Account created. Check your inbox to confirm, then sign in.");
+        if (result.error) throw new Error(result.error.message);
+        setInfo("Account created successfully! Sign in to continue.");
         setMode("signin");
-      } else if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) throw error;
-        setInfo("Password reset email sent. Check your inbox.");
+        setEmail("");
+        setPassword("");
+        setName("");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const result = await authClient.signIn.email({
+          email,
+          password,
+        });
+        if (result.error) throw new Error(result.error.message);
         navigate({ to: "/chat" });
       }
     } catch (err) {
@@ -70,29 +66,9 @@ function AuthPage() {
     }
   };
 
-  const signInWithGoogle = async () => {
-    setError(null);
-    setInfo(null);
-    setBusy(true);
-    try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-        extraParams: { prompt: "select_account" },
-      });
-      if (result.redirected) return;
-      if (result.error) throw result.error;
-      navigate({ to: "/chat" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const titles: Record<Mode, { h: string; sub: string; btn: string }> = {
     signin: { h: "Access LORD", sub: "Sign in to continue.", btn: "Sign In" },
     signup: { h: "Create Identity", sub: "Register a new operator.", btn: "Create Account" },
-    forgot: { h: "Reset Access", sub: "We'll email you a reset link.", btn: "Send Reset Link" },
   };
   const t = titles[mode];
 
@@ -106,24 +82,6 @@ function AuthPage() {
 
         <HudPanel title={t.btn}>
           <form onSubmit={submit} className="space-y-3">
-            {mode === "signin" && (
-              <>
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  disabled={busy}
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
-                >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4 text-primary" />}
-                  Continue with Google
-                </button>
-                <div className="flex items-center gap-3 py-1">
-                  <span className="h-px flex-1 bg-border/60" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">or</span>
-                  <span className="h-px flex-1 bg-border/60" />
-                </div>
-              </>
-            )}
             {mode === "signup" && (
               <Field icon={UserIcon} label="Name">
                 <input
@@ -144,19 +102,17 @@ function AuthPage() {
                 className="w-full bg-transparent text-base outline-none sm:text-sm"
               />
             </Field>
-            {mode !== "forgot" && (
-              <Field icon={Lock} label="Password">
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-transparent text-base outline-none sm:text-sm"
-                />
-              </Field>
-            )}
+            <Field icon={Lock} label="Password">
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-transparent text-base outline-none sm:text-sm"
+              />
+            </Field>
 
             {error && (
               <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -180,30 +136,17 @@ function AuthPage() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
               {mode === "signin" ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("forgot");
-                      setError(null);
-                      setInfo(null);
-                    }}
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    Forgot password?
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signup");
-                      setError(null);
-                      setInfo(null);
-                    }}
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    Create account →
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signup");
+                    setError(null);
+                    setInfo(null);
+                  }}
+                  className="text-muted-foreground hover:text-primary"
+                >
+                  Create account →
+                </button>
               ) : (
                 <button
                   type="button"

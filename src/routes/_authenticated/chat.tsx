@@ -21,7 +21,7 @@ import { useAppContext } from "@/components/lord/AppContextProvider";
 import { ChatSidebar } from "@/components/lord/ChatSidebar";
 import { RichMessage } from "@/components/lord/RichMessage";
 import { TypingDots } from "@/components/lord/TypingDots";
-import { supabase } from "@/integrations/supabase/client";
+import { getConversations, createConversation, deleteConversation, getMessages, upsertMessages } from "@/lib/actions";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { cn } from "@/lib/utils";
 import type { LordMode } from "@/lib/lord-config";
@@ -47,22 +47,22 @@ const MODES: Array<{
 ];
 
 interface ConversationRow {
-  id: string;
-  user_id: string;
+  id: number;
+  userId: string;
   title: string;
-  created_at: string;
-  updated_at: string;
-  last_message_at: string;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface MessageRow {
   id: string;
-  conversation_id: string;
-  user_id: string;
-  role: "user" | "assistant" | "system";
+  userId: string;
+  conversationId: number;
+  role: "user" | "assistant";
   content: string;
-  model: string | null;
-  created_at: string;
+  metadata?: any;
+  createdAt: Date;
 }
 
 function ChatPage() {
@@ -72,20 +72,16 @@ function ChatPage() {
 
   const [mode, setMode] = useState<LordMode>("balanced");
   const [input, setInput] = useState("");
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Conversations list (Supabase)
+  // Conversations list
   const { data: conversations = [] } = useQuery({
-    queryKey: ["conversations", user.id],
+    queryKey: ["conversations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select("*")
-        .order("last_message_at", { ascending: false });
-      if (error) throw error;
-      return data as ConversationRow[];
+      const result = await getConversations();
+      return (result || []) as ConversationRow[];
     },
   });
 
@@ -94,13 +90,9 @@ function ChatPage() {
     queryKey: ["messages", conversationId],
     enabled: !!conversationId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId!)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data as MessageRow[];
+      if (!conversationId) return [];
+      const result = await getMessages(conversationId);
+      return (result || []) as MessageRow[];
     },
   });
 
@@ -117,7 +109,7 @@ function ChatPage() {
   );
 
   const { messages, setMessages, sendMessage, status, error, regenerate } = useChat({
-    id: conversationId ?? "draft",
+    id: conversationId ? `conv-${conversationId}` : "draft",
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `${getApiBaseUrl()}/api/chat`,
@@ -128,63 +120,39 @@ function ChatPage() {
     }),
     onFinish: async ({ messages: completed, isError }) => {
       if (isError || !conversationId) return;
-      // Persist the latest user + assistant pair
       const lastTwo = completed.slice(-2);
       const rows = lastTwo
         .map((m) => ({
           id: m.id,
-          conversation_id: conversationId,
-          user_id: user.id,
-          role: m.role,
+          role: m.role as "user" | "assistant",
           content: m.parts
             .filter((p) => p.type === "text")
             .map((p) => (p as { text: string }).text)
             .join(""),
-          model: m.role === "assistant" ? mode : null,
         }))
         .filter((r) => r.content.trim());
       if (rows.length) {
-        await supabase.from("messages").upsert(rows, { onConflict: "id" });
+        await upsertMessages({ conversationId, messageRows: rows });
       }
-      await supabase
-        .from("conversations")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", conversationId);
-      qc.invalidateQueries({ queryKey: ["conversations", user.id] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
     },
   });
 
-  // Ensure a conversation exists, return its id
-  const ensureConversation = async (firstMessage: string): Promise<string> => {
+  const ensureConversation = async (firstMessage: string): Promise<number> => {
     if (conversationId) return conversationId;
     const title = firstMessage.slice(0, 60) || "New conversation";
-    const { data, error } = await supabase
-      .from("conversations")
-      .insert({ user_id: user.id, title })
-      .select()
-      .single();
-    if (error) throw error;
-    setConversationId(data.id);
-    qc.invalidateQueries({ queryKey: ["conversations", user.id] });
-    return data.id;
+    const newConv = await createConversation({ title });
+    setConversationId(newConv.id);
+    qc.invalidateQueries({ queryKey: ["conversations"] });
+    return newConv.id;
   };
 
-  const renameMutation = useMutation({
-    mutationFn: async ({ id, title }: { id: string; title: string }) => {
-      const { error } = await supabase.from("conversations").update({ title }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["conversations", user.id] }),
-  });
-
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await supabase.from("messages").delete().eq("conversation_id", id);
-      const { error } = await supabase.from("conversations").delete().eq("id", id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      await deleteConversation(id);
     },
     onSuccess: (_d, id) => {
-      qc.invalidateQueries({ queryKey: ["conversations", user.id] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
       if (id === conversationId) startNewChat();
     },
   });
@@ -194,9 +162,9 @@ function ChatPage() {
     setMessages([]);
   };
 
-  const loadConversation = (id: string) => {
+  const loadConversation = (id: number) => {
     setConversationId(id);
-    setMessages([]); // will be replaced by initialMessages once query loads
+    setMessages([]);
   };
 
   useEffect(() => {
@@ -212,14 +180,10 @@ function ChatPage() {
     try {
       const convId = await ensureConversation(text);
       setInput("");
-      // Persist the user message immediately
       const userMsgId = crypto.randomUUID();
-      await supabase.from("messages").insert({
-        id: userMsgId,
-        conversation_id: convId,
-        user_id: user.id,
-        role: "user",
-        content: text,
+      await upsertMessages({
+        conversationId: convId,
+        messageRows: [{ id: userMsgId, role: "user", content: text }],
       });
       sendMessage({ text });
     } catch (err) {
@@ -242,14 +206,13 @@ function ChatPage() {
               onSelect={loadConversation}
               onNew={startNewChat}
               onDelete={(id) => deleteMutation.mutate(id)}
-              onRename={(id, title) => renameMutation.mutate({ id, title })}
-              conversations={conversations}
+              conversations={conversations.map(c => ({ ...c, id: c.id.toString(), user_id: c.userId, created_at: c.createdAt.toISOString(), updated_at: c.updatedAt.toISOString(), last_message_at: c.updatedAt.toISOString() }))}
             />
           </div>
         )}
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden md:gap-4">
-            <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden md:gap-4">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="hidden rounded-md border border-border/60 bg-background/40 p-2 text-muted-foreground transition hover:text-primary lg:block"
@@ -258,8 +221,8 @@ function ChatPage() {
               <LayoutPanelLeft className="h-4 w-4" />
             </button>
 
-              <div className="hud-panel flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-2 md:flex-wrap md:overflow-visible">
-                <span className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="hud-panel flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-2 md:flex-wrap md:overflow-visible">
+              <span className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 Mode
               </span>
               {MODES.map((m) => {

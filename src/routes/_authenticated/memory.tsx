@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Pin, PinOff, Search, LogOut, Loader2 } from "lucide-react";
+import { Plus, Trash2, Search, LogOut, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/lord/AppShell";
 import { HudPanel } from "@/components/lord/HudPanel";
-import { supabase } from "@/integrations/supabase/client";
+import { getMemories, createMemory, deleteMemory } from "@/lib/actions";
+import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/memory")({
@@ -16,13 +17,15 @@ type Category = "goal" | "preference" | "fact" | "project" | "note";
 const CATEGORIES: Category[] = ["goal", "preference", "fact", "project", "note"];
 
 interface MemoryRow {
-  id: string;
-  user_id: string;
+  id: number;
+  userId: string;
+  title: string;
   content: string;
-  category: string;
-  pinned: boolean;
-  created_at: string;
-  updated_at: string;
+  category?: string;
+  tags?: string[];
+  importance?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 function MemoryPage() {
@@ -38,12 +41,8 @@ function MemoryPage() {
   const { data: memories = [], isLoading, error } = useQuery({
     queryKey: ["memories"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("memories")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as MemoryRow[];
+      const result = await getMemories();
+      return (result || []) as MemoryRow[];
     },
   });
 
@@ -51,10 +50,7 @@ function MemoryPage() {
     mutationFn: async () => {
       const text = content.trim();
       if (!text) return;
-      const { error } = await supabase
-        .from("memories")
-        .insert({ content: text, category, user_id: user.id });
-      if (error) throw error;
+      await createMemory({ title: text, content: text, category });
     },
     onSuccess: () => {
       setContent("");
@@ -63,28 +59,16 @@ function MemoryPage() {
   });
 
   const removeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("memories").delete().eq("id", id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      await deleteMemory(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["memories"] }),
   });
 
-  const pinMutation = useMutation({
-    mutationFn: async (m: MemoryRow) => {
-      const { error } = await supabase
-        .from("memories")
-        .update({ pinned: !m.pinned })
-        .eq("id", m.id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["memories"] }),
-  });
-
-  const signOut = async () => {
+  const handleSignOut = async () => {
     await qc.cancelQueries();
     qc.clear();
-    await supabase.auth.signOut();
+    await signOut();
     navigate({ to: "/auth", replace: true });
   };
 
@@ -93,11 +77,7 @@ function MemoryPage() {
       memories
         .filter((m) => filter === "all" || m.category === filter)
         .filter((m) => !search || m.content.toLowerCase().includes(search.toLowerCase()))
-        .sort(
-          (a, b) =>
-            (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        ),
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [memories, filter, search],
   );
 
@@ -113,7 +93,7 @@ function MemoryPage() {
           </p>
         </div>
         <button
-          onClick={signOut}
+          onClick={handleSignOut}
           className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-md border border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary"
         >
           <LogOut className="h-3.5 w-3.5" /> Sign out
@@ -202,26 +182,11 @@ function MemoryPage() {
               {filtered.map((m) => (
                 <li
                   key={m.id}
-                  className={cn(
-                    "group rounded-md border bg-background/30 p-3",
-                    m.pinned
-                      ? "border-primary/60 shadow-[0_0_12px_var(--hud)]"
-                      : "border-border/40",
-                  )}
+                  className="group rounded-md border border-border/40 bg-background/30 p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm">{m.content}</p>
                     <div className="flex gap-1 opacity-60 group-hover:opacity-100">
-                      <button
-                        onClick={() => pinMutation.mutate(m)}
-                        className="text-muted-foreground hover:text-primary"
-                      >
-                        {m.pinned ? (
-                          <Pin className="h-4 w-4 text-primary" />
-                        ) : (
-                          <PinOff className="h-4 w-4" />
-                        )}
-                      </button>
                       <button
                         onClick={() => removeMutation.mutate(m.id)}
                         className="text-muted-foreground hover:text-destructive"
@@ -232,9 +197,9 @@ function MemoryPage() {
                   </div>
                   <div className="mt-1 flex gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <span className="rounded bg-primary/15 px-1.5 py-0.5 text-primary">
-                      {m.category}
+                      {m.category || "note"}
                     </span>
-                    <span>{new Date(m.created_at).toLocaleDateString()}</span>
+                    <span>{new Date(m.createdAt).toLocaleDateString()}</span>
                   </div>
                 </li>
               ))}

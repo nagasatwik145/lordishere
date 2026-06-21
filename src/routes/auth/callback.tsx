@@ -60,13 +60,9 @@ function OAuthCallbackPage() {
                 data.user.email?.split("@")[0] ||
                 "User",
             });
-            await supabase
-              .from("user_settings")
-              .insert({
-                user_id: data.user.id,
-              })
-              .on("error", () => {});
-            // Ignore if already exists
+            await supabase.from("user_settings").insert({
+              user_id: data.user.id,
+            });
           } catch (e) {
             console.warn("[oauth-callback] Profile creation issue:", e);
           }

@@ -131,8 +131,46 @@ export const Route = createFileRoute("/api/chat")({
         const mode: LordMode = body.mode ?? "balanced";
         const modelId = LORD_MODELS[mode];
 
-        // Construct enriched system prompt with application context
-        let systemPrompt = LORD_SYSTEM_PROMPT;
+        // Load user memories for context
+        let memoriesContext = "";
+        try {
+          if (userId) {
+            const supabaseUrl = process.env.SUPABASE_URL;
+            const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+            if (supabaseUrl && supabaseKey) {
+              const memSupabase = createClient<Database>(supabaseUrl, supabaseKey, {
+                global: {
+                  headers: {
+                    Authorization: `Bearer ${process.env.SUPABASE_PUBLISHABLE_KEY}`,
+                  },
+                },
+                auth: { persistSession: false, autoRefreshToken: false },
+              });
+
+              const { data: memories, error: memError } = await memSupabase
+                .from("memories")
+                .select("content, category, pinned")
+                .eq("user_id", userId)
+                .order("pinned", { ascending: false })
+                .order("created_at", { ascending: false })
+                .limit(10);
+
+              if (!memError && memories && memories.length > 0) {
+                memoriesContext = `\n\nUSER MEMORIES & PREFERENCES:\n${memories
+                  .map(
+                    (m) =>
+                      `[${m.category.toUpperCase()}${m.pinned ? " ⭐" : ""}] ${m.content}`,
+                  )
+                  .join("\n")}`;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[chat:${requestId}] Failed to load memories:`, e);
+        }
+
+        // Construct enriched system prompt with application context and memories
+        let systemPrompt = LORD_SYSTEM_PROMPT + memoriesContext;
         if (body.context) {
           systemPrompt += `\n\nCURRENT APPLICATION CONTEXT:\n${JSON.stringify(body.context, null, 2)}`;
         }

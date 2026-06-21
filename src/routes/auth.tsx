@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { AppShell } from "@/components/lord/AppShell";
 import { HudPanel } from "@/components/lord/HudPanel";
 import { Loader2, Mail, Lock, User as UserIcon, Chrome } from "lucide-react";
@@ -41,7 +40,7 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -50,6 +49,26 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+
+        // Manually create profile for new user if signup succeeded
+        if (data.user) {
+          try {
+            await supabase.from("profiles").upsert({
+              id: data.user.id,
+              email,
+              name: name.trim() || email.split("@")[0],
+            });
+            await supabase
+              .from("user_settings")
+              .insert({
+                user_id: data.user.id,
+              })
+              .on("error", () => {}); // Ignore if already exists
+          } catch (e) {
+            console.warn("[auth] Profile creation issue:", e);
+          }
+        }
+
         setInfo("Account created. Check your inbox to confirm, then sign in.");
         setMode("signin");
       } else if (mode === "forgot") {
@@ -73,19 +92,20 @@ function AuthPage() {
   const signInWithGoogle = async () => {
     setError(null);
     setInfo(null);
-    setBusy(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-        extraParams: { prompt: "select_account" },
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: "select_account",
+          },
+        },
       });
-      if (result.redirected) return;
-      if (result.error) throw result.error;
-      navigate({ to: "/chat" });
+      if (error) throw error;
+      // OAuth redirects, so we don't navigate manually
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed");
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -114,12 +134,18 @@ function AuthPage() {
                   disabled={busy}
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
                 >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4 text-primary" />}
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Chrome className="h-4 w-4 text-primary" />
+                  )}
                   Continue with Google
                 </button>
                 <div className="flex items-center gap-3 py-1">
                   <span className="h-px flex-1 bg-border/60" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">or</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    or
+                  </span>
                   <span className="h-px flex-1 bg-border/60" />
                 </div>
               </>

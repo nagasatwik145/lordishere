@@ -37,9 +37,7 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-const PRIMARY_NAV = NAV.filter((item) =>
-  ["/", "/chat", "/voice", "/memory"].includes(item.to),
-);
+const PRIMARY_NAV = NAV.filter((item) => ["/", "/chat", "/voice", "/memory"].includes(item.to));
 const SECONDARY_NAV = NAV.filter((item) => !PRIMARY_NAV.some((primary) => primary.to === item.to));
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -137,7 +135,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-display text-lg font-bold gradient-text">LORD</div>
-                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Mobile command</div>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Mobile command
+                </div>
               </div>
               <button
                 onClick={() => setDrawerOpen(false)}
@@ -267,9 +267,7 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
                   {(user.user_metadata?.name as string | undefined) ?? "Operator"}
                 </span>
               </div>
-              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                {user.email}
-              </div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{user.email}</div>
             </div>
             <Link
               to="/settings"

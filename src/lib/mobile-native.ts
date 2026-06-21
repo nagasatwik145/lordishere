@@ -69,11 +69,14 @@ export const mobileNotifications = {
 };
 
 export const mobileHaptics = {
-  light: () => isNativeMobile() && Haptics.impact({ style: ImpactStyle.Light }).catch(() => undefined),
+  light: () =>
+    isNativeMobile() && Haptics.impact({ style: ImpactStyle.Light }).catch(() => undefined),
   success: () =>
-    isNativeMobile() && Haptics.notification({ type: NotificationType.Success }).catch(() => undefined),
+    isNativeMobile() &&
+    Haptics.notification({ type: NotificationType.Success }).catch(() => undefined),
   error: () =>
-    isNativeMobile() && Haptics.notification({ type: NotificationType.Error }).catch(() => undefined),
+    isNativeMobile() &&
+    Haptics.notification({ type: NotificationType.Error }).catch(() => undefined),
 };
 
 export const mobileNetwork = {

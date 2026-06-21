@@ -64,7 +64,11 @@ export function HealthHud({ compact = false }: { compact?: boolean }) {
     <HudPanel
       title="System Intelligence"
       subtitle={`Health: ${healthStatus.toUpperCase()}`}
-      className={cn("mb-4 border-l-4 transition-all duration-500", compact ? "w-full" : "w-64", borderClass)}
+      className={cn(
+        "mb-4 border-l-4 transition-all duration-500",
+        compact ? "w-full" : "w-64",
+        borderClass,
+      )}
       action={
         <button
           onClick={() => setCollapsed(true)}

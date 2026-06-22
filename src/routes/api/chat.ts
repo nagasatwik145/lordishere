@@ -31,10 +31,14 @@ const ChatRequestSchema = z.object({
     .optional(),
 });
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
 export const Route = createFileRoute("/api/chat")({
   server: {
+    middleware: [requireSupabaseAuth],
     handlers: {
-      POST: async ({ request }) => {
+      POST: async ({ request, context }) => {
+        // context.supabase and context.userId are available when authenticated
         const requestId = crypto.randomUUID();
         const apiKey = process.env.LOVABLE_API_KEY;
         if (!apiKey) {

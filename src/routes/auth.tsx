@@ -26,9 +26,25 @@ function AuthPage() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted && data.user) navigate({ to: "/chat" });
-    });
+
+    const initializeAuth = async () => {
+      if (typeof window === "undefined") return;
+
+      if (window.location.hash.includes("access_token=") || window.location.hash.includes("refresh_token=")) {
+        const { data, error } = await supabase.auth.getSessionFromUrl();
+        if (!error && data.session?.user && mounted) {
+          navigate({ to: "/chat", replace: true });
+          return;
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (mounted && data.session?.user) {
+        navigate({ to: "/chat" });
+      }
+    };
+
+    initializeAuth();
     return () => {
       mounted = false;
     };
@@ -75,13 +91,15 @@ function AuthPage() {
     setInfo(null);
     setBusy(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-        extraParams: { prompt: "select_account" },
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+          queryParams: { prompt: "select_account" },
+        },
       });
-      if (result.redirected) return;
-      if (result.error) throw result.error;
-      navigate({ to: "/chat" });
+      if (error) throw error;
+      // The client will detect the session from the redirect URL on load.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally {

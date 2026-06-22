@@ -52,12 +52,71 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    let mounted = true;
+
+    const ensureUserDefaults = async (user: User) => {
+      try {
+        await supabase.from("profiles").upsert(
+          {
+            id: user.id,
+            email: user.email,
+            name: (user.user_metadata as any)?.name ?? (user.email?.split("@")[0] ?? null),
+          },
+          { onConflict: "id" },
+        );
+        await supabase.from("user_settings").upsert(
+          {
+            user_id: user.id,
+            preferences: {},
+          },
+          { onConflict: "user_id" },
+        );
+      } catch (e) {
+        console.error("Failed to ensure user profile/settings", e);
+      }
+    };
+
+    const initializeSession = async () => {
+      if (typeof window !== "undefined" && window.location.hash.includes("access_token=")) {
+        const { data, error } = await supabase.auth.getSessionFromUrl();
+        if (error) {
+          console.error("Supabase OAuth callback parsing failed", error);
+        } else if (data.session?.user) {
+          await ensureUserDefaults(data.session.user);
+          setUser(data.session.user);
+          try {
+            navigate({ to: "/chat", replace: true });
+          } catch (e) {
+            // ignore navigation race conditions
+          }
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      const user = data.session?.user ?? null;
+      setUser(user);
+      if (user) {
+        await ensureUserDefaults(user);
+      }
+    };
+
+    initializeSession();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const user = session?.user ?? null;
+      setUser(user);
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && user) {
+        navigate({ to: "/chat" });
+        void ensureUserDefaults(user);
+      }
     });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const signOut = async () => {
     await qc.cancelQueries();

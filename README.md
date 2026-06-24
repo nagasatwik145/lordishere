@@ -1,4 +1,4 @@
-# ⚡ LORD AI 
+# ⚡ LORD AI
 
 <div align="center">
 
@@ -16,9 +16,9 @@
 
 ---
 
-### 🧠 Your Personal AI 
+### 🧠 Your Personal AI
 
-*Not just a chatbot. An intelligent command center.*
+_Not just a chatbot. An intelligent command center._
 
 </div>
 
@@ -48,13 +48,13 @@ into a single unified experience.
 
 LORD supports multiple specialized reasoning modes:
 
-| Mode | Purpose |
-|--------|----------|
-| ⚡ Fast | Quick answers |
-| ⚖️ Balanced | Everyday assistant |
-| 🧠 Reasoning | Deep analysis |
-| 💻 Coding | Software engineering |
-| 🎨 Creative | Writing & ideation |
+| Mode         | Purpose              |
+| ------------ | -------------------- |
+| ⚡ Fast      | Quick answers        |
+| ⚖️ Balanced  | Everyday assistant   |
+| 🧠 Reasoning | Deep analysis        |
+| 💻 Coding    | Software engineering |
+| 🎨 Creative  | Writing & ideation   |
 
 ---
 

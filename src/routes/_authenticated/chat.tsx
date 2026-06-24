@@ -248,8 +248,8 @@ function ChatPage() {
           </div>
         )}
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden md:gap-4">
-            <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden md:gap-4">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="hidden rounded-md border border-border/60 bg-background/40 p-2 text-muted-foreground transition hover:text-primary lg:block"
@@ -258,8 +258,8 @@ function ChatPage() {
               <LayoutPanelLeft className="h-4 w-4" />
             </button>
 
-              <div className="hud-panel flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-2 md:flex-wrap md:overflow-visible">
-                <span className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="hud-panel flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-2 md:flex-wrap md:overflow-visible">
+              <span className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 Mode
               </span>
               {MODES.map((m) => {

@@ -102,7 +102,9 @@ function ProductivityPage() {
                   >
                     {t.done && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
                   </button>
-                  <span className={cn("min-w-0 break-words text-sm", t.done && "line-through")}>{t.title}</span>
+                  <span className={cn("min-w-0 break-words text-sm", t.done && "line-through")}>
+                    {t.title}
+                  </span>
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono uppercase",

@@ -35,7 +35,11 @@ function MemoryPage() {
   const [filter, setFilter] = useState<"all" | Category>("all");
   const [search, setSearch] = useState("");
 
-  const { data: memories = [], isLoading, error } = useQuery({
+  const {
+    data: memories = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["memories"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -155,9 +159,7 @@ function MemoryPage() {
             </button>
           </div>
           {addMutation.error && (
-            <p className="mt-2 text-xs text-destructive">
-              {(addMutation.error as Error).message}
-            </p>
+            <p className="mt-2 text-xs text-destructive">{(addMutation.error as Error).message}</p>
           )}
         </HudPanel>
 

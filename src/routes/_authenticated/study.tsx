@@ -46,7 +46,8 @@ const TASK_TOOLS = [
     label: "Flashcards",
     icon: Layers,
     desc: "10 concise Q/A cards on any topic.",
-    prompt: (t: string) => `Generate 10 concise Q/A flashcards on "${t}". Format as: Q: ...\nA: ...`,
+    prompt: (t: string) =>
+      `Generate 10 concise Q/A flashcards on "${t}". Format as: Q: ...\nA: ...`,
   },
   {
     id: "quiz",
@@ -139,10 +140,7 @@ const SUBJECT_GROUPS: { group: string; items: string[] }[] = [
   },
 ];
 
-async function streamChat(
-  body: unknown,
-  onDelta: (acc: string) => void,
-): Promise<string> {
+async function streamChat(body: unknown, onDelta: (acc: string) => void): Promise<string> {
   const res = await fetch(`${getApiBaseUrl()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -267,15 +265,12 @@ function TutorMode() {
             { id: userMsg.id, role: "user", parts: [{ type: "text", text }] },
           ],
         },
-        (acc) =>
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: acc } : x))),
+        (acc) => setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: acc } : x))),
       );
     } catch {
       setMessages((m) =>
         m.map((x) =>
-          x.id === assistantId
-            ? { ...x, text: "Connection error. Please retry, Sir." }
-            : x,
+          x.id === assistantId ? { ...x, text: "Connection error. Please retry, Sir." } : x,
         ),
       );
     } finally {
@@ -289,7 +284,10 @@ function TutorMode() {
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div className="hud-panel relative flex h-[calc(100svh-13rem)] min-h-[430px] flex-col overflow-hidden sm:min-h-[520px] lg:h-[68vh]">
         <CornerBrackets />
-        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-3 custom-scrollbar sm:space-y-5 sm:p-5">
+        <div
+          ref={scrollRef}
+          className="flex-1 space-y-4 overflow-y-auto p-3 custom-scrollbar sm:space-y-5 sm:p-5"
+        >
           {messages.map((m) =>
             m.role === "assistant" ? (
               <div key={m.id} className="flex items-start gap-3">
@@ -424,9 +422,7 @@ function TasksMode() {
       await streamChat(
         {
           mode: "reasoning",
-          messages: [
-            { id: "u", role: "user", parts: [{ type: "text", text: active.prompt(t) }] },
-          ],
+          messages: [{ id: "u", role: "user", parts: [{ type: "text", text: active.prompt(t) }] }],
         },
         setOutput,
       );

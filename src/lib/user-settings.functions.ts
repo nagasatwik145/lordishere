@@ -40,7 +40,10 @@ export const updateUserSettings = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { error } = await supabase
       .from("user_settings")
-      .upsert({ user_id: userId, ...data, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      .upsert(
+        { user_id: userId, ...data, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" },
+      );
     if (error) throw error;
     return { ok: true };
   });

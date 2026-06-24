@@ -33,7 +33,15 @@ function AuthPage() {
     let mounted = true;
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("[Auth] onAuthStateChange", event, session?.user?.email, "pathname:", window.location.pathname, "hash:", window.location.hash.substring(0, 100));
+      console.log(
+        "[Auth] onAuthStateChange",
+        event,
+        session?.user?.email,
+        "pathname:",
+        window.location.pathname,
+        "hash:",
+        window.location.hash.substring(0, 100),
+      );
       if (!mounted) return;
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
         console.log(`[Auth] ${event}, navigating to /chat for user`, session.user.email);
@@ -44,7 +52,12 @@ function AuthPage() {
     const initializeAuth = async () => {
       if (typeof window === "undefined") return;
 
-      console.log("[Auth] Initializing auth, pathname:", window.location.pathname, "hash:", window.location.hash.substring(0, 100));
+      console.log(
+        "[Auth] Initializing auth, pathname:",
+        window.location.pathname,
+        "hash:",
+        window.location.hash.substring(0, 100),
+      );
       const { data } = await supabase.auth.getSession();
       console.log("[Auth] getSession result:", { user: data.session?.user?.email });
       if (mounted && data.session?.user) {
@@ -146,12 +159,18 @@ function AuthPage() {
                   disabled={busy}
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
                 >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4 text-primary" />}
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Chrome className="h-4 w-4 text-primary" />
+                  )}
                   Continue with Google
                 </button>
                 <div className="flex items-center gap-3 py-1">
                   <span className="h-px flex-1 bg-border/60" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">or</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    or
+                  </span>
                   <span className="h-px flex-1 bg-border/60" />
                 </div>
               </>

@@ -37,9 +37,7 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-const PRIMARY_NAV = NAV.filter((item) =>
-  ["/", "/chat", "/voice", "/memory"].includes(item.to),
-);
+const PRIMARY_NAV = NAV.filter((item) => ["/", "/chat", "/voice", "/memory"].includes(item.to));
 const SECONDARY_NAV = NAV.filter((item) => !PRIMARY_NAV.some((primary) => primary.to === item.to));
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -60,7 +58,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           {
             id: user.id,
             email: user.email,
-            name: (user.user_metadata as any)?.name ?? (user.email?.split("@")[0] ?? null),
+            name:
+              ((user.user_metadata as Record<string, unknown>)?.name as string | undefined) ??
+              user.email?.split("@")[0] ??
+              null,
           },
           { onConflict: "id" },
         );
@@ -76,8 +77,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
 
     const initializeSession = async () => {
-      console.log("[AppShell] Initializing session, pathname:", window.location.pathname, "hash:", window.location.hash.substring(0, 100));
-      
+      console.log(
+        "[AppShell] Initializing session, pathname:",
+        window.location.pathname,
+        "hash:",
+        window.location.hash.substring(0, 100),
+      );
+
       const { data } = await supabase.auth.getSession();
       console.log("[AppShell] getSession result:", { user: data.session?.user?.email });
       if (!mounted) return;
@@ -91,7 +97,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     initializeSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("[AppShell] Auth state changed:", event, session?.user?.email, "pathname:", window.location.pathname, "hash:", window.location.hash.substring(0, 100));
+      console.log(
+        "[AppShell] Auth state changed:",
+        event,
+        session?.user?.email,
+        "pathname:",
+        window.location.pathname,
+        "hash:",
+        window.location.hash.substring(0, 100),
+      );
       const user = session?.user ?? null;
       if (!mounted) return;
       setUser(user);
@@ -187,7 +201,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-display text-lg font-bold gradient-text">LORD</div>
-                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Mobile command</div>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Mobile command
+                </div>
               </div>
               <button
                 onClick={() => setDrawerOpen(false)}
@@ -317,9 +333,7 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
                   {(user.user_metadata?.name as string | undefined) ?? "Operator"}
                 </span>
               </div>
-              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                {user.email}
-              </div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{user.email}</div>
             </div>
             <Link
               to="/settings"

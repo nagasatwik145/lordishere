@@ -26,9 +26,7 @@ export function RichMessage({ text }: { text: string }) {
   );
 }
 
-type Block =
-  | { type: "text"; text: string }
-  | { type: "code"; lang: string; code: string };
+type Block = { type: "text"; text: string } | { type: "code"; lang: string; code: string };
 
 function splitFencedCode(input: string): Block[] {
   const out: Block[] = [];

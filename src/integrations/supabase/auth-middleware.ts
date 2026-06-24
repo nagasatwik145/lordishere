@@ -53,20 +53,24 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       },
     });
 
-    const { data, error } = await supabase.auth.getClaims(token);
-    if (error || !data?.claims) {
+    // `getClaims` is not part of the Supabase JS client API; instead
+    // use `auth.getUser()` which will read the user from the Authorization header
+    // we set on the client above. This returns the authenticated user and their ID.
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data?.user) {
       throw new Error("Unauthorized: Invalid token");
     }
 
-    if (!data.claims.sub) {
+    const userId = data.user.id;
+    if (!userId) {
       throw new Error("Unauthorized: No user ID found in token");
     }
 
     return next({
       context: {
         supabase,
-        userId: data.claims.sub,
-        claims: data.claims,
+        userId,
+        claims: data.user,
       },
     });
   },

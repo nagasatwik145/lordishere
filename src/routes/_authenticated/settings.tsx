@@ -166,9 +166,7 @@ function SettingsPage() {
               <span className="text-xs text-[var(--hud-success)]">Saved</span>
             )}
             {mutation.isError && (
-              <span className="text-xs text-destructive">
-                {(mutation.error as Error).message}
-              </span>
+              <span className="text-xs text-destructive">{(mutation.error as Error).message}</span>
             )}
             <button
               onClick={() =>

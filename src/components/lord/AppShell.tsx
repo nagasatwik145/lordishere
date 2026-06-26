@@ -37,9 +37,7 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-const PRIMARY_NAV = NAV.filter((item) =>
-  ["/", "/chat", "/voice", "/memory"].includes(item.to),
-);
+const PRIMARY_NAV = NAV.filter((item) => ["/", "/chat", "/voice", "/memory"].includes(item.to));
 const SECONDARY_NAV = NAV.filter((item) => !PRIMARY_NAV.some((primary) => primary.to === item.to));
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -52,12 +50,59 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    let mounted = true;
+
+    const ensureUserDefaults = async (user: User) => {
+      try {
+        await supabase.from("profiles").upsert(
+          {
+            id: user.id,
+            email: user.email,
+            name:
+              ((user.user_metadata as Record<string, unknown>)?.name as string | undefined) ??
+              user.email?.split("@")[0] ??
+              null,
+          },
+          { onConflict: "id" },
+        );
+        await supabase.from("user_settings").upsert(
+          {
+            user_id: user.id,
+          },
+          { onConflict: "user_id" },
+        );
+      } catch (e) {
+        console.error("Failed to ensure user profile/settings", e);
+      }
+    };
+
+    const initializeSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      const user = data.session?.user ?? null;
+      setUser(user);
+      if (user) {
+        await ensureUserDefaults(user);
+      }
+    };
+
+    initializeSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      const user = session?.user ?? null;
+      if (!mounted) return;
+      setUser(user);
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && user) {
+        navigate({ to: "/chat" });
+        void ensureUserDefaults(user);
+      }
     });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+
+    return () => {
+      mounted = false;
+      authListener?.subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const signOut = async () => {
     await qc.cancelQueries();
@@ -137,7 +182,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-display text-lg font-bold gradient-text">LORD</div>
-                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Mobile command</div>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Mobile command
+                </div>
               </div>
               <button
                 onClick={() => setDrawerOpen(false)}
@@ -267,9 +314,7 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
                   {(user.user_metadata?.name as string | undefined) ?? "Operator"}
                 </span>
               </div>
-              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                {user.email}
-              </div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{user.email}</div>
             </div>
             <Link
               to="/settings"

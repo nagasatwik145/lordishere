@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { AppShell } from "@/components/lord/AppShell";
 import { HudPanel } from "@/components/lord/HudPanel";
 import { Loader2, Mail, Lock, User as UserIcon, Chrome } from "lucide-react";
@@ -23,16 +22,40 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const hasNavigatedAfterAuth = useRef(false);
+
+  const navigateAfterAuth = useCallback(() => {
+    if (hasNavigatedAfterAuth.current) return;
+    hasNavigatedAfterAuth.current = true;
+    navigate({ to: "/chat", replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted && data.user) navigate({ to: "/chat" });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        navigateAfterAuth();
+      }
     });
+
+    const initializeAuth = async () => {
+      if (typeof window === "undefined") return;
+
+      const { data } = await supabase.auth.getSession();
+      if (mounted && data.session?.user) {
+        navigateAfterAuth();
+      }
+    };
+
+    initializeAuth();
+
     return () => {
       mounted = false;
+      authListener.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigateAfterAuth]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,14 +98,17 @@ function AuthPage() {
     setInfo(null);
     setBusy(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-        extraParams: { prompt: "select_account" },
+      const redirectUrl = `${window.location.origin}/auth`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: { prompt: "select_account" },
+        },
       });
-      if (result.redirected) return;
-      if (result.error) throw result.error;
-      navigate({ to: "/chat" });
+      if (error) throw error;
     } catch (err) {
+      console.error("[Auth] Google OAuth error:", err);
       setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally {
       setBusy(false);
@@ -114,12 +140,18 @@ function AuthPage() {
                   disabled={busy}
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
                 >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4 text-primary" />}
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Chrome className="h-4 w-4 text-primary" />
+                  )}
                   Continue with Google
                 </button>
                 <div className="flex items-center gap-3 py-1">
                   <span className="h-px flex-1 bg-border/60" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">or</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    or
+                  </span>
                   <span className="h-px flex-1 bg-border/60" />
                 </div>
               </>

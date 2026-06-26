@@ -106,10 +106,7 @@ export function ChatSidebar({
                   </div>
                 ) : (
                   <div className="flex items-start justify-between gap-2">
-                    <button
-                      onClick={() => onSelect(conv.id)}
-                      className="min-w-0 flex-1 text-left"
-                    >
+                    <button onClick={() => onSelect(conv.id)} className="min-w-0 flex-1 text-left">
                       <div className="flex items-center gap-1.5">
                         <MessageSquare className="h-3 w-3 flex-shrink-0" />
                         <p className="truncate font-medium">{conv.title || "Untitled"}</p>

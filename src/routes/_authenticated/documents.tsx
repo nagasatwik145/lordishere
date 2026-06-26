@@ -4,6 +4,7 @@ import { Upload, Loader2, FileText } from "lucide-react";
 import { AppShell } from "@/components/lord/AppShell";
 import { HudPanel } from "@/components/lord/HudPanel";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({ meta: [{ title: "LORD — Document Intelligence" }] }),
@@ -41,7 +42,7 @@ function DocsPage() {
           ? `Extract detailed structured notes (headings, bullets, definitions, examples) from:\n\n---\n${text}`
           : `Answer this question using ONLY the document below. If unknown, say so.\n\nQuestion: ${question}\n\n---\n${text}`;
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/chat`, {
+      const res = await authenticatedFetch(`${getApiBaseUrl()}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -133,7 +134,7 @@ function DocsPage() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="Ask a question about the document…"
-              className="min-h-11 w-full rounded-md border border-border/60 bg-background/40 px-3 py-2 text-base outline-none focus:border-primary sm:text-sm"
+                className="min-h-11 w-full rounded-md border border-border/60 bg-background/40 px-3 py-2 text-base outline-none focus:border-primary sm:text-sm"
               />
             )}
             <button

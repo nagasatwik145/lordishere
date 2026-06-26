@@ -23,6 +23,7 @@ import { RichMessage } from "@/components/lord/RichMessage";
 import { TypingDots } from "@/components/lord/TypingDots";
 import { supabase } from "@/integrations/supabase/client";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { getSupabaseAuthHeaders } from "@/lib/authenticated-fetch";
 import { cn } from "@/lib/utils";
 import type { LordMode } from "@/lib/lord-config";
 
@@ -74,7 +75,9 @@ function ChatPage() {
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
 
   // Conversations list (Supabase)
   const { data: conversations = [] } = useQuery({
@@ -90,7 +93,7 @@ function ChatPage() {
   });
 
   // Messages for active conversation
-  const { data: storedMessages = [] } = useQuery({
+  const { data: storedMessages = [], error: storedMessagesError } = useQuery({
     queryKey: ["messages", conversationId],
     enabled: !!conversationId,
     queryFn: async () => {
@@ -121,36 +124,46 @@ function ChatPage() {
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `${getApiBaseUrl()}/api/chat`,
+      headers: getSupabaseAuthHeaders,
       body: () => ({
         mode,
         context: { page: currentRoute, workflow: activeWorkflow, metrics, history },
       }),
     }),
     onFinish: async ({ messages: completed, isError }) => {
-      if (isError || !conversationId) return;
-      // Persist the latest user + assistant pair
-      const lastTwo = completed.slice(-2);
-      const rows = lastTwo
-        .map((m) => ({
-          id: m.id,
-          conversation_id: conversationId,
+      const activeConversationId = activeConversationIdRef.current;
+      if (isError || !activeConversationId) return;
+
+      const assistantMessage = completed
+        .slice()
+        .reverse()
+        .find((m) => m.role === "assistant");
+      const content =
+        assistantMessage?.parts
+          .filter((p) => p.type === "text")
+          .map((p) => (p as { text: string }).text)
+          .join("") ?? "";
+
+      if (content.trim()) {
+        const { error: insertError } = await supabase.from("messages").insert({
+          id: crypto.randomUUID(),
+          conversation_id: activeConversationId,
           user_id: user.id,
-          role: m.role,
-          content: m.parts
-            .filter((p) => p.type === "text")
-            .map((p) => (p as { text: string }).text)
-            .join(""),
-          model: m.role === "assistant" ? mode : null,
-        }))
-        .filter((r) => r.content.trim());
-      if (rows.length) {
-        await supabase.from("messages").upsert(rows, { onConflict: "id" });
+          role: "assistant",
+          content,
+          model: mode,
+        });
+        if (insertError) {
+          console.error("[chat] failed to persist assistant message", insertError);
+          setPersistenceError(insertError.message);
+        }
       }
       await supabase
         .from("conversations")
         .update({ last_message_at: new Date().toISOString() })
-        .eq("id", conversationId);
+        .eq("id", activeConversationId);
       qc.invalidateQueries({ queryKey: ["conversations", user.id] });
+      qc.invalidateQueries({ queryKey: ["messages", activeConversationId] });
     },
   });
 
@@ -165,6 +178,7 @@ function ChatPage() {
       .single();
     if (error) throw error;
     setConversationId(data.id);
+    activeConversationIdRef.current = data.id;
     qc.invalidateQueries({ queryKey: ["conversations", user.id] });
     return data.id;
   };
@@ -190,12 +204,16 @@ function ChatPage() {
   });
 
   const startNewChat = () => {
+    setPersistenceError(null);
     setConversationId(null);
+    activeConversationIdRef.current = null;
     setMessages([]);
   };
 
   const loadConversation = (id: string) => {
+    setPersistenceError(null);
     setConversationId(id);
+    activeConversationIdRef.current = id;
     setMessages([]); // will be replaced by initialMessages once query loads
   };
 
@@ -209,21 +227,25 @@ function ChatPage() {
     e?.preventDefault();
     const text = input.trim();
     if (!text || busy) return;
+    setPersistenceError(null);
     try {
       const convId = await ensureConversation(text);
-      setInput("");
+      activeConversationIdRef.current = convId;
       // Persist the user message immediately
       const userMsgId = crypto.randomUUID();
-      await supabase.from("messages").insert({
+      const { error: insertError } = await supabase.from("messages").insert({
         id: userMsgId,
         conversation_id: convId,
         user_id: user.id,
         role: "user",
         content: text,
       });
+      if (insertError) throw insertError;
+      setInput("");
       sendMessage({ text });
     } catch (err) {
       console.error("[chat] failed to send", err);
+      setPersistenceError(err instanceof Error ? err.message : "Failed to save this message.");
     }
   };
 
@@ -248,8 +270,8 @@ function ChatPage() {
           </div>
         )}
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden md:gap-4">
-            <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden md:gap-4">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="hidden rounded-md border border-border/60 bg-background/40 p-2 text-muted-foreground transition hover:text-primary lg:block"
@@ -258,8 +280,8 @@ function ChatPage() {
               <LayoutPanelLeft className="h-4 w-4" />
             </button>
 
-              <div className="hud-panel flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-2 md:flex-wrap md:overflow-visible">
-                <span className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="hud-panel flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-2 md:flex-wrap md:overflow-visible">
+              <span className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 Mode
               </span>
               {MODES.map((m) => {
@@ -291,7 +313,16 @@ function ChatPage() {
             className="flex-1 overflow-y-auto rounded-xl hud-panel p-3 md:p-6"
           >
             {messages.length === 0 ? (
-              <EmptyState onPick={(s) => setInput(s)} />
+              persistenceError || storedMessagesError ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  {persistenceError ??
+                    (storedMessagesError instanceof Error
+                      ? storedMessagesError.message
+                      : "Failed to load saved messages.")}
+                </div>
+              ) : (
+                <EmptyState onPick={(s) => setInput(s)} />
+              )
             ) : (
               <ul className="space-y-4">
                 {messages.map((m, idx) => {
@@ -337,6 +368,14 @@ function ChatPage() {
                 {error && (
                   <li className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                     {error.message || "The AI request failed. Please retry."}
+                  </li>
+                )}
+                {(persistenceError || storedMessagesError) && (
+                  <li className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                    {persistenceError ??
+                      (storedMessagesError instanceof Error
+                        ? storedMessagesError.message
+                        : "Failed to load saved messages.")}
                   </li>
                 )}
               </ul>

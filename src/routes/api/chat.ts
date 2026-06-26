@@ -2,12 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { z } from "zod";
 import {
-  createLovableAiGatewayProvider,
+  createOpenRouterProvider,
   LORD_MODELS,
   LORD_SYSTEM_PROMPT,
   type LordMode,
 } from "@/lib/ai-gateway.server";
 import { apiErrorResponse, getSafeErrorMessage } from "@/lib/api-error";
+import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 
 const ChatRequestSchema = z.object({
   messages: z
@@ -33,16 +34,17 @@ const ChatRequestSchema = z.object({
 
 export const Route = createFileRoute("/api/chat")({
   server: {
+    middleware: [requireSupabaseRequestAuth],
     handlers: {
       POST: async ({ request }) => {
         const requestId = crypto.randomUUID();
-        const apiKey = process.env.LOVABLE_API_KEY;
+        const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey) {
-          console.error(`[chat:${requestId}] Lovable AI is not configured`);
+          console.error(`[chat:${requestId}] OpenRouter API key is not configured`);
           return apiErrorResponse(
             503,
             "AI_NOT_CONFIGURED",
-            "AI is temporarily unavailable.",
+            "AI is not configured. Add OPENROUTER_API_KEY to the server environment.",
             requestId,
           );
         }
@@ -79,7 +81,7 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         try {
-          const gateway = createLovableAiGatewayProvider(apiKey);
+          const gateway = createOpenRouterProvider(apiKey);
           const result = streamText({
             model: gateway(modelId),
             system: systemPrompt,
